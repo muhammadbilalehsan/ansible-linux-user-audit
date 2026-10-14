@@ -1,0 +1,33 @@
+---
+- name: Local user access audit
+  hosts: all
+  gather_facts: true
+  become: true
+
+  tasks:
+    - name: Collect user audit
+      ansible.builtin.shell: |
+        echo "USERNAME STATUS ADMINISTRATOR"
+        awk -F: '$3>=1000 && $3<=60000 {print $1}' /etc/passwd | while read u; do
+          st=$(passwd -S "$u" | awk '{print ($2=="P")?"Active":"Disabled/Locked"}')
+          adm=$(sudo -lU "$u" 2>/dev/null | grep -q "(ALL" && echo Yes || echo No)
+          printf "%-25s %-18s %s\n" "$u" "$st" "$adm"
+        done
+        echo ""
+        echo "SUDOERS.D DIRECTORY"
+        ls -l /etc/sudoers.d
+      args:
+        executable: /bin/bash
+      register: audit
+      changed_when: false
+
+    - name: Show report
+      ansible.builtin.debug:
+        msg: "{{ header + audit.stdout_lines }}"
+      vars:
+        header:
+          - "System Hostname : {{ ansible_hostname }}"
+          - "IP Address      : {{ ansible_default_ipv4.address | default('N/A') }}"
+          - "Server Time     : {{ ansible_date_time.iso8601 }}"
+          - "UID Range       : 1000-60000"
+          - ""
